@@ -1,4 +1,4 @@
-# 생성: 2026-10-21 22:45 (KST)
+# 생성: 2026-10-21 22:18 (KST)
 """저장소 인터페이스(Store)와 시험·로컬용 메모리 저장소(MemoryStore)."""
 import threading
 from collections.abc import Iterator

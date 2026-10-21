@@ -1,4 +1,4 @@
-# 생성: 2026-10-21 22:40 (KST)
+# 생성: 2026-10-21 22:17 (KST)
 import pytest
 
 from teamform.model import Account, Student

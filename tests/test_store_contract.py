@@ -1,4 +1,4 @@
-# 생성: 2026-10-21 23:50 (KST)
+# 생성: 2026-10-21 22:26 (KST)
 """MemoryStore와 PgStore가 똑같이 동작하는지 확인.
 PgStore 쪽은 DATABASE_URL이 있고 TEAMFORM_PG_TESTS=1일 때만 돈다(실제 DB의 tf_ 데이터를 지우므로)."""
 import os

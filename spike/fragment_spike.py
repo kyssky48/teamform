@@ -1,4 +1,4 @@
-# 생성: 2026-10-21 22:15 (KST)
+# 생성: 2026-10-21 22:13 (KST)
 # 버리는 시범 코드: st.fragment 안의 단추와 result 컨테이너 갱신 확인
 import streamlit as st
 

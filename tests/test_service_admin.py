@@ -1,4 +1,4 @@
-# 생성: 2026-10-21 22:58 (KST)
+# 생성: 2026-10-21 22:20 (KST)
 from teamform import auth, rules, service
 from teamform.model import REJECTED
 from tests.conftest import ADMIN, acct

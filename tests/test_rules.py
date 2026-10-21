@@ -1,4 +1,4 @@
-# 생성: 2026-10-21 22:20 (KST)
+# 생성: 2026-10-21 22:14 (KST)
 from teamform.rules import (
     block_reason,
     infeasible_reason,

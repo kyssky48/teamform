@@ -1,4 +1,4 @@
-# 생성: 2026-10-21 22:25 (KST)
+# 생성: 2026-10-21 22:15 (KST)
 """팀 규칙 (공고 2.3절, 2.5절, 3장). Streamlit과 DB를 모르는 순수 함수."""
 from collections import Counter
 from collections.abc import Sequence

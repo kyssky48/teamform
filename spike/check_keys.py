@@ -1,4 +1,4 @@
-# 생성: 2026-10-21 22:15 (KST)
+# 생성: 2026-10-21 22:13 (KST)
 import subprocess, sys, time, re
 from playwright.sync_api import sync_playwright, expect
 
