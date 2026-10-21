@@ -5,15 +5,19 @@ import re
 import pytest
 
 from teamform import auth, rules, service
+from teamform.ai import AIError
 from teamform.store import MemoryStore
 from tests.conftest import ADMIN
 from tests.scenarios import ALL
 
 
+def failing_ai(model, prompt):
+    raise AIError("HTTP 429")
+
+
 def assign_and_confirm(st) -> None:
-    plan = rules.solve(service.current_teams(st), service.unassigned(st))
-    assert plan is not None
-    service.save_plan(st, plan, "앱")
+    msg = service.assign(st, ADMIN, failing_ai, ["a:free", "b:free", "c:free"], lambda s: None)
+    assert msg == "승인: 3차까지 실패해 앱이 배정안을 만듦"
     assert service.confirm(st, ADMIN).startswith("승인")
 
 

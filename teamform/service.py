@@ -1,12 +1,15 @@
 # 생성: 2026-10-21 22:50 (KST)
 """앱의 동작. 결과는 "승인", "대기", "거절", "막힘"으로 시작하는 문구로 돌려준다."""
 import json
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
+from teamform.ai import AIError, ModelCaller, build_prompt, parse_plan, with_deadline
 from teamform.auth import hash_password
 from teamform.model import APPROVED, NO, PENDING, REJECTED, YES, Account, Application, Student
 from teamform.roster import RosterError, parse_roster
-from teamform.rules import block_reason, validate_plan
+from teamform.rules import block_reason, infeasible_reason, solve, validate_plan
 from teamform.store import Store
 
 CLOSED_KEY = "closed"
@@ -220,3 +223,61 @@ def board(store: Store, viewer: Account) -> Board:
         teams.append(TeamView(t, store.members(t), pending))
     can_apply = not viewer.is_admin and not closed and my_team is None and my_pending is None
     return Board(teams, closed, my_team, my_pending, can_apply)
+
+
+# ---- AI 배정 (공고 2.5절 3~8항) ----
+
+APP_SOURCE = "앱"
+
+
+def assign(
+    store: Store,
+    actor: Account,
+    caller: ModelCaller,
+    models: list[str],
+    on_status: Callable[[str], None],
+    deadline_s: float = 120,
+) -> str:
+    if not actor.is_admin:
+        return ADMIN_ONLY
+    if not is_closed(store):
+        return "막힘: 아직 마감하지 않음"
+    teams, left = current_teams(store), unassigned(store)
+    fallback = solve(teams, left)
+    if fallback is None:
+        reason = infeasible_reason(teams, left)
+        on_status(f"규칙을 지키는 배정이 없음: {reason}")
+        return f"막힘: 규칙을 지키는 배정이 없음 - {reason}"
+    if not left:
+        save_plan(store, {}, APP_SOURCE)
+        return "승인: 배정할 학생이 없음"
+
+    prompt = build_prompt(teams, left)
+    for tier, model in enumerate(models, 1):
+        on_status(f"{tier}차 모델({model}) 응답을 기다리는 중 (최대 {deadline_s:g}초)")
+        t0 = time.monotonic()
+        try:
+            plan = parse_plan(with_deadline(lambda: caller(model, prompt), deadline_s))
+            errs = validate_plan(teams, left, plan)
+            if errs:
+                raise AIError("배정안 검사 실패: " + "; ".join(errs[:3]))
+        except AIError as e:
+            detail = str(e)
+        except Exception as e:  # 예상 못 한 오류도 실패로 보고 다음 모델로 (내용은 화면에 쓰지 않음)
+            detail = f"예상 못 한 오류({type(e).__name__})"
+        else:
+            store.log_ai(tier, model, "성공", "", _ms(t0))
+            source = f"{tier}차 모델({model})"
+            save_plan(store, plan, source)
+            on_status(f"{tier}차 모델의 배정안이 검사를 통과함")
+            return f"승인: {source}의 배정안을 받음"
+        store.log_ai(tier, model, "실패", detail, _ms(t0))
+        on_status(f"{tier}차 모델 실패: {detail}")
+
+    save_plan(store, fallback, APP_SOURCE)
+    on_status("3차까지 실패해 앱이 배정안을 만듦")
+    return "승인: 3차까지 실패해 앱이 배정안을 만듦"
+
+
+def _ms(t0: float) -> int:
+    return int((time.monotonic() - t0) * 1000)
