@@ -1,0 +1,23 @@
+# 생성: 2026-10-21 22:52 (KST)
+# Supabase 무료 프로젝트가 일시정지되지 않도록 매일 DB에 질의 한 번을 보냄(공고 3장 "DB 일시정지"의 어려운 해결)
+# 저장소 Settings > Secrets and variables > Actions 에 DATABASE_URL 을 넣어야 함
+name: db-ping
+
+on:
+  schedule:
+    - cron: "0 0 * * *"   # 매일 00:00 UTC = 09:00 KST
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "psycopg[binary]==3.3.6"
+      - run: python scripts/db_ping.py
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
