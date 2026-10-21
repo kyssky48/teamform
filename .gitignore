@@ -1,0 +1,10 @@
+# 생성: 2026-10-21 22:07 (KST)
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.venv/
+__pycache__/
+.pytest_cache/
+*.zip
+.superpowers/
