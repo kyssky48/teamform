@@ -3,10 +3,22 @@
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import ContextManager, Protocol
 
 from teamform.model import PENDING, Account, Application, Student
+
+
+@dataclass
+class Snapshot:
+    """화면 한 번 그리는 데 필요한 현황. PgStore는 질의 한 번으로 읽는다."""
+
+    students: dict[str, Student]
+    team_ids: list[int]
+    members: dict[int, list[str]]  # 팀 번호 → 학번(자리 순)
+    pending: list[Application]
+    votes: dict[int, dict[str, str]]  # 대기 지원 id → 투표자 학번 → 찬성/거부
+    settings: dict[str, str]
 
 
 class Store(Protocol):
@@ -34,6 +46,7 @@ class Store(Protocol):
     def get_setting(self, key: str) -> str | None: ...
     def set_setting(self, key: str, value: str | None) -> None: ...
     def log_ai(self, tier: int, model: str, outcome: str, detail: str, elapsed_ms: int) -> None: ...
+    def snapshot(self) -> Snapshot: ...
 
 
 ADMIN_NO = "admin"
@@ -167,3 +180,15 @@ class MemoryStore:
 
     def log_ai(self, tier: int, model: str, outcome: str, detail: str, elapsed_ms: int) -> None:
         self.ai_logs.append((tier, model, outcome, detail, elapsed_ms))
+
+    def snapshot(self) -> Snapshot:
+        with self._lock:
+            pending = self.pending_applications()
+            return Snapshot(
+                students={s.student_no: s for s in self.list_students()},
+                team_ids=self.team_ids(),
+                members={t: [self._slots[t][k] for k in sorted(self._slots[t])] for t in self._teams},
+                pending=pending,
+                votes={a.id: self.votes(a.id) for a in pending if self._votes.get(a.id)},
+                settings=dict(self._settings),
+            )

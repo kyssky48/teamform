@@ -161,3 +161,9 @@ def test_board_can_apply_and_closed(make_store):
     service.close(st, ADMIN)
     b = service.board(st, acct(a))
     assert b.closed and not b.can_apply
+
+
+def test_board_unassigned_matches_service(make_store):
+    st, (a, b, c) = started(make_store, [("PL",), ("WP",), ("FD",)])
+    service.apply(st, acct(a), 1)
+    assert service.board(st, ADMIN).unassigned == service.unassigned(st) == [b, c]

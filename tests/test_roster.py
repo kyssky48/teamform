@@ -52,6 +52,7 @@ def test_student_can_uses_main_and_sub_roles():
         ("2026101,학생1,기획자,테스터;발표자;보고서 작성자\n", 1),  # 보조 역할 3개
         ("2026101,학생1,기획자,요리사\n", 1),  # 보조 역할이 역할 밖
         (",학생1,기획자,\n", 1),  # 학번 빈칸
+        ("admin,학생1,기획자,\n", 1),  # 관리자 학번과 겹침
     ],
 )
 def test_parse_errors(body, line):

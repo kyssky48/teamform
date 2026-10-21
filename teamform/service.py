@@ -203,27 +203,31 @@ class Board:
     my_team: int | None
     my_pending: Application | None
     can_apply: bool
+    unassigned: list[Student]
 
 
 def board(store: Store, viewer: Account) -> Board:
-    closed = is_closed(store)
+    snap = store.snapshot()  # 화면을 3초마다 다시 그리므로 질의 한 번으로 읽음
+    closed = snap.settings.get(CLOSED_KEY) == "1"
     me = viewer.student_no
-    my_team = None if viewer.is_admin else store.team_of(me)
-    my_pending = None if viewer.is_admin else store.pending_application_of(me)
+    team_of = {no: t for t, nos in snap.members.items() for no in nos}
+    my_team = None if viewer.is_admin else team_of.get(me)
+    my_pending = None if viewer.is_admin else next((a for a in snap.pending if a.student_no == me), None)
     teams = []
-    for t in store.team_ids():
+    for t in snap.team_ids:
         pending = []
-        for app in store.pending_applications(t):
-            applicant = store.get_student(app.student_no)
-            if applicant is None:
+        for app in snap.pending:
+            applicant = snap.students.get(app.student_no)
+            if app.team_id != t or applicant is None:
                 continue
-            my_vote = store.votes(app.id).get(me)
+            my_vote = snap.votes.get(app.id, {}).get(me)
             can_vote = not closed and my_team == t and my_vote is None and app.student_no != me
             pending.append(PendingView(applicant, my_vote, can_vote))
-        teams.append(TeamView(t, store.members(t), pending))
+        members = [snap.students[no] for no in snap.members.get(t, []) if no in snap.students]
+        teams.append(TeamView(t, members, pending))
     can_apply = not viewer.is_admin and not closed and my_team is None and my_pending is None
-    return Board(teams, closed, my_team, my_pending, can_apply)
-
+    unassigned = [s for no, s in sorted(snap.students.items()) if no not in team_of]
+    return Board(teams, closed, my_team, my_pending, can_apply, unassigned)
 
 # ---- AI 배정 (공고 2.5절 3~8항) ----
 

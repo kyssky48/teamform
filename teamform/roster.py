@@ -37,6 +37,8 @@ def parse_roster(data: bytes) -> list[Student]:
         no, name, main, subs = (_clean(c) for c in row)
         if not no or not name:
             raise RosterError(f"{where}: 학번이나 이름이 비어 있음")
+        if no.lower() == "admin":
+            raise RosterError(f"{where}: 학번 admin은 관리자용이라 쓸 수 없음")
         if no in seen:
             raise RosterError(f"{where}: 학번 {no}이(가) 겹침")
         if main not in ROLES:
