@@ -79,8 +79,12 @@ def settle(page: Page) -> None:
         page.wait_for_selector('[data-testid="stApp"][data-test-script-state="running"]', timeout=2000)
     except PlaywrightTimeout:
         pass  # 이미 끝났거나 아주 빨리 끝남
-    page.wait_for_selector('[data-testid="stApp"]:not([data-test-script-state="running"])', timeout=60000)
-    page.wait_for_timeout(200)
+    # 3초 자동 갱신(fragment)의 실행 끝을 클릭 실행의 끝으로 잘못 보지 않도록, 0.8초 동안 조용할 때까지 기다림
+    quiet, deadline = 0, time.time() + 60
+    while quiet < 8 and time.time() < deadline:
+        state = page.locator('[data-testid="stApp"]').get_attribute("data-test-script-state")
+        quiet = 0 if state == "running" else quiet + 1
+        page.wait_for_timeout(100)
 
 
 def key(page: Page, k: str):
