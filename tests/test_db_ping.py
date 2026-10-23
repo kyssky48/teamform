@@ -39,3 +39,15 @@ def test_ping_error_hides_url(capsys):
 def test_ping_without_url(capsys):
     assert db_ping.main(None) == 1
     assert "DATABASE_URL 없음" in capsys.readouterr().out
+
+
+def test_ping_encodes_special_chars_in_password():
+    seen = {}
+
+    def connect(url):
+        seen["url"] = url
+        return FakeConn()
+
+    raw = "postgresql://postgres.abc:p@ss@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+    assert db_ping.main(raw, connect=connect) == 0
+    assert seen["url"] == "postgresql://postgres.abc:p%40ss@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"

@@ -167,3 +167,36 @@ def test_board_unassigned_matches_service(make_store):
     st, (a, b, c) = started(make_store, [("PL",), ("WP",), ("FD",)])
     service.apply(st, acct(a), 1)
     assert service.board(st, ADMIN).unassigned == service.unassigned(st) == [b, c]
+
+
+def test_board_tells_whether_viewer_still_exists(make_store):
+    st, (a,) = started(make_store, [("PL",)])
+    assert service.board(st, acct(a)).viewer_exists
+    assert service.board(st, ADMIN).viewer_exists
+    service.start(st, ADMIN, csv_of([S("WP")]), 3)  # 명단을 바꿔 a가 사라짐
+    assert not service.board(st, acct(a)).viewer_exists
+
+
+def test_rejected_application_still_votable_by_others(make_store):
+    # 숨은 시나리오에 "B 거부 → A 찬성" 순서가 있어도 A의 단추가 남아 있어야 결과(거절)를 볼 수 있음
+    st, (a, b, c, d) = started(make_store, [("PL",), ("WP",), ("FD",), ("TT",)])
+    service.apply(st, acct(a), 1)
+    service.apply(st, acct(b), 1)
+    service.vote(st, acct(a), b.student_no, True)
+    service.apply(st, acct(c), 1)
+    assert service.vote(st, acct(b), c.student_no, False).startswith("거절")
+    view_a = service.board(st, acct(a)).teams[0].pending
+    assert [(pv.applicant, pv.can_vote, pv.status) for pv in view_a] == [(c, True, "거절")]
+    view_b = service.board(st, acct(b)).teams[0].pending
+    assert [(pv.my_vote, pv.can_vote) for pv in view_b] == [("거부", False)]
+    assert service.vote(st, acct(a), c.student_no, True) == "거절: 팀원이 거부함"
+    service.apply(st, acct(c), 2)  # 다른 팀에 다시 지원하면 팀1 목록에서 사라짐
+    assert service.board(st, acct(a)).teams[0].pending == []
+
+
+def test_closed_rejections_not_shown_as_votable(make_store):
+    st, (a, b) = started(make_store, [("PL",), ("WP",)])
+    service.apply(st, acct(a), 1)
+    service.apply(st, acct(b), 1)
+    service.close(st, ADMIN)
+    assert service.board(st, acct(a)).teams[0].pending == []

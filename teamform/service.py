@@ -10,7 +10,7 @@ from teamform.auth import hash_password
 from teamform.model import APPROVED, NO, PENDING, REJECTED, YES, Account, Application, Student
 from teamform.roster import RosterError, parse_roster
 from teamform.rules import block_reason, infeasible_reason, solve, validate_plan
-from teamform.store import Store
+from teamform.store import CLOSE_REASON, Store
 
 CLOSED_KEY = "closed"
 SEAT_TAKEN = "자리가 이미 찼음"
@@ -128,7 +128,7 @@ def close(store: Store, actor: Account) -> str:
             return "막힘: 이미 마감함"
         store.set_setting(CLOSED_KEY, "1")
         for app in store.pending_applications():
-            store.set_application_status(app.id, REJECTED, "모집 마감")
+            store.set_application_status(app.id, REJECTED, CLOSE_REASON)
         for t in store.team_ids():
             members = store.members(t)
             if len(members) == 1:
@@ -187,6 +187,7 @@ class PendingView:
     applicant: Student
     my_vote: str | None
     can_vote: bool
+    status: str = PENDING  # 거절이면 다른 팀원이 거부한 뒤에도 단추를 남겨 결과(거절)를 보여 줌
 
 
 @dataclass
@@ -204,6 +205,7 @@ class Board:
     my_pending: Application | None
     can_apply: bool
     unassigned: list[Student]
+    viewer_exists: bool  # 명단을 다시 올려 로그인한 학생이 사라졌으면 False
 
 
 def board(store: Store, viewer: Account) -> Board:
@@ -216,18 +218,19 @@ def board(store: Store, viewer: Account) -> Board:
     teams = []
     for t in snap.team_ids:
         pending = []
-        for app in snap.pending:
+        for app in snap.pending + snap.rejected:
             applicant = snap.students.get(app.student_no)
             if app.team_id != t or applicant is None:
                 continue
             my_vote = snap.votes.get(app.id, {}).get(me)
             can_vote = not closed and my_team == t and my_vote is None and app.student_no != me
-            pending.append(PendingView(applicant, my_vote, can_vote))
+            pending.append(PendingView(applicant, my_vote, can_vote, app.status))
         members = [snap.students[no] for no in snap.members.get(t, []) if no in snap.students]
         teams.append(TeamView(t, members, pending))
     can_apply = not viewer.is_admin and not closed and my_team is None and my_pending is None
     unassigned = [s for no, s in sorted(snap.students.items()) if no not in team_of]
-    return Board(teams, closed, my_team, my_pending, can_apply, unassigned)
+    viewer_exists = viewer.is_admin or me in snap.students
+    return Board(teams, closed, my_team, my_pending, can_apply, unassigned, viewer_exists)
 
 # ---- AI 배정 (공고 2.5절 3~8항) ----
 

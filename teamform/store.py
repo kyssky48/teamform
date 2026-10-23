@@ -3,10 +3,12 @@
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import ContextManager, Protocol
 
-from teamform.model import PENDING, Account, Application, Student
+from teamform.model import PENDING, REJECTED, Account, Application, Student
+
+CLOSE_REASON = "모집 마감"
 
 
 @dataclass
@@ -17,8 +19,9 @@ class Snapshot:
     team_ids: list[int]
     members: dict[int, list[str]]  # 팀 번호 → 학번(자리 순)
     pending: list[Application]
-    votes: dict[int, dict[str, str]]  # 대기 지원 id → 투표자 학번 → 찬성/거부
+    votes: dict[int, dict[str, str]]  # 대기 지원과 rejected의 id → 투표자 학번 → 찬성/거부
     settings: dict[str, str]
+    rejected: list[Application] = field(default_factory=list)  # 학생의 가장 최근 지원이 거절된 것(마감 거절 제외)
 
 
 class Store(Protocol):
@@ -184,11 +187,17 @@ class MemoryStore:
     def snapshot(self) -> Snapshot:
         with self._lock:
             pending = self.pending_applications()
+            latest: dict[str, Application] = {}
+            for a in sorted(self._apps.values(), key=lambda a: a.id):
+                latest[a.student_no] = a
+            rejected = sorted((a for a in latest.values() if a.status == REJECTED and a.reason != CLOSE_REASON),
+                              key=lambda a: a.id)
             return Snapshot(
                 students={s.student_no: s for s in self.list_students()},
                 team_ids=self.team_ids(),
                 members={t: [self._slots[t][k] for k in sorted(self._slots[t])] for t in self._teams},
                 pending=pending,
-                votes={a.id: self.votes(a.id) for a in pending if self._votes.get(a.id)},
+                votes={a.id: self.votes(a.id) for a in pending + rejected if self._votes.get(a.id)},
                 settings=dict(self._settings),
+                rejected=rejected,
             )

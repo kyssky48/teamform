@@ -12,7 +12,7 @@ from contextlib import contextmanager
 
 import psycopg
 
-from teamform.model import PENDING, Account, Application, Student
+from teamform.model import PENDING, REJECTED, Account, Application, Student
 from teamform.store import ADMIN_NO, Snapshot
 
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "schema.sql")
@@ -32,6 +32,10 @@ where {where} order by a.id
 """
 
 _SNAPSHOT_SQL = """
+with latest as (  -- 학생마다 가장 최근 지원
+  select distinct on (student_id) id, team_id, student_id, status, reason
+  from tf_applications order by student_id, id desc
+)
 select json_build_object(
   'students', (select coalesce(json_agg(json_build_object(
         'no', s.student_no, 'name', s.name, 'main', s.main_role,
@@ -48,7 +52,12 @@ select json_build_object(
   'votes', (select coalesce(json_agg(json_build_object('app', v.application_id, 'voter', s.student_no,
         'vote', v.vote)), '[]')
       from tf_votes v join tf_students s on s.id = v.voter_id
-      join tf_applications a on a.id = v.application_id where a.status = '대기'),
+      join tf_applications a on a.id = v.application_id
+      where a.status = '대기' or a.id in (select id from latest)),
+  'rejected', (select coalesce(json_agg(json_build_object('id', l.id, 'team', l.team_id, 'no', s.student_no,
+        'reason', l.reason) order by l.id), '[]')
+      from latest l join tf_students s on s.id = l.student_id
+      where l.status = '거절' and coalesce(l.reason, '') <> '모집 마감'),
   'settings', (select coalesce(json_object_agg(key, value), '{}') from tf_settings)
 )
 """
@@ -63,8 +72,9 @@ def _app(row) -> Application:
 
 
 class PgStore:
-    def __init__(self, database_url: str) -> None:
+    def __init__(self, database_url: str, connect=psycopg.connect) -> None:
         self._url = database_url
+        self._connect = connect
         self._lock = threading.RLock()
         self._conn: psycopg.Connection | None = None
         self._depth = 0
@@ -74,22 +84,56 @@ class PgStore:
     def _connection(self) -> psycopg.Connection:
         if self._conn is None or self._conn.closed or (self._depth == 0 and self._conn.broken):
             # prepare_threshold=None: Supabase 연결 풀러에서 준비된 문장 충돌을 피함
-            self._conn = psycopg.connect(self._url, autocommit=True, prepare_threshold=None, connect_timeout=10)
+            # keepalives: 오래 쉬는 동안 연결이 조용히 끊기는 것을 줄임
+            self._conn = self._connect(
+                self._url, autocommit=True, prepare_threshold=None, connect_timeout=10,
+                keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=3,
+            )
+            # 질의 하나가 15초를 넘으면 끊음: 모든 화면이 한 잠금을 기다리므로 오래 붙잡지 않게
+            self._conn.execute("set statement_timeout = 15000")
         return self._conn
 
+    def _drop_connection(self) -> None:
+        try:
+            if self._conn is not None:
+                self._conn.close()
+        except Exception:
+            pass
+        self._conn = None
+
     def _q(self, sql: str, params=()) -> list[tuple]:
+        """질의 하나. 트랜잭션 밖에서 연결이 끊겨 있었으면 다시 이어 한 번 더 시도함."""
         with self._lock:
-            cur = self._connection().execute(sql, params)
-            return cur.fetchall() if cur.description else []
+            for attempt in (0, 1):
+                try:
+                    cur = self._connection().execute(sql, params)
+                    return cur.fetchall() if cur.description else []
+                except psycopg.OperationalError:
+                    if attempt or self._depth:
+                        raise
+                    self._drop_connection()
+            return []
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
         with self._lock:
-            conn = self._connection()
+            for attempt in (0, 1):
+                tx = self._connection().transaction()
+                try:
+                    tx.__enter__()  # BEGIN (안쪽이면 savepoint)
+                    break
+                except psycopg.OperationalError:
+                    if attempt or self._depth:
+                        raise
+                    self._drop_connection()
             self._depth += 1
             try:
-                with conn.transaction():
-                    yield
+                yield
+            except BaseException as e:
+                if not tx.__exit__(type(e), e, e.__traceback__):
+                    raise
+            else:
+                tx.__exit__(None, None, None)
             finally:
                 self._depth -= 1
 
@@ -168,13 +212,14 @@ class PgStore:
         return [r[0] for r in self._q("select id from tf_teams order by id")]
 
     def members(self, team_id: int) -> list[Student]:
-        nos = [r[0] for r in self._q(
-            "select s.student_no from tf_members m join tf_students s on s.id = m.student_id "
-            "where m.team_id = %s order by m.slot_no",
+        return [_student(r) for r in self._q(
+            "select s.student_no, s.name, s.main_role, "
+            "       coalesce(array_agg(r.role order by r.position) filter (where r.role is not null), '{}') "
+            "from tf_members m join tf_students s on s.id = m.student_id "
+            "left join tf_student_sub_roles r on r.student_id = s.id "
+            "where m.team_id = %s group by s.id, m.slot_no order by m.slot_no",
             (team_id,),
         )]
-        by_no = {s.student_no: s for s in self.list_students()} if nos else {}
-        return [by_no[n] for n in nos]
 
     def team_of(self, student_no: str) -> int | None:
         rows = self._q(
@@ -292,4 +337,5 @@ class PgStore:
             pending=[Application(p["id"], p["team"], p["no"], PENDING, p["reason"]) for p in data["pending"]],
             votes=votes,
             settings=dict(data["settings"]),
+            rejected=[Application(r["id"], r["team"], r["no"], REJECTED, r["reason"]) for r in data["rejected"]],
         )

@@ -137,3 +137,19 @@ def test_snapshot(store):
 def test_log_ai(store):
     two(store)
     store.log_ai(1, "m:free", "실패", "HTTP 429", 1200)
+
+
+def test_snapshot_rejected_latest_only(store):
+    a, b = two(store)
+    store.add_member(1, "t001")
+    old = store.create_application(1, "t002")
+    store.add_vote(old.id, "t001", "거부")
+    store.set_application_status(old.id, "거절", "팀원이 거부함")
+    snap = store.snapshot()
+    assert [(x.id, x.team_id, x.student_no, x.status) for x in snap.rejected] == [(old.id, 1, "t002", "거절")]
+    assert snap.votes[old.id] == {"t001": "거부"}
+    new = store.create_application(2, "t002")
+    snap = store.snapshot()
+    assert snap.rejected == [] and [x.id for x in snap.pending] == [new.id]
+    store.set_application_status(new.id, "거절", "모집 마감")
+    assert store.snapshot().rejected == []

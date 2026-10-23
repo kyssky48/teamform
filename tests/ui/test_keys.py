@@ -153,3 +153,23 @@ def test_secrets_not_rendered(new_page):
     html = admin.content()
     for bad in ("sk-or-", "postgres://", "postgresql://", ADMIN_PW):
         assert bad not in html
+
+
+def test_vote_after_another_member_rejected(new_page):
+    people = roster("쉬움")
+    start_as_admin(new_page, "쉬움", 3)
+    a, b, c = new_page(), new_page(), new_page()
+    login(a, people[1][0], "1234")
+    login(b, people[4][0], "1234")
+    login(c, people[7][0], "1234")
+    click(a, "apply_1")
+    click(b, "apply_1")
+    key(a, f"vote_yes_{people[4][0]}").wait_for(timeout=7000)
+    click(a, f"vote_yes_{people[4][0]}")
+    click(c, "apply_1")
+    key(b, f"vote_no_{people[7][0]}").wait_for(timeout=7000)
+    click(b, f"vote_no_{people[7][0]}")
+    assert result(b).startswith("거절")
+    key(a, f"vote_yes_{people[7][0]}").wait_for(timeout=7000)  # 거부가 먼저 나와도 단추가 남아 있음
+    click(a, f"vote_yes_{people[7][0]}")
+    assert result(a).startswith("거절"), result(a)

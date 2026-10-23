@@ -4,6 +4,9 @@ GitHub Actions가 매일 실행한다. DB 주소나 오류 내용은 출력하�
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from teamform.dburl import normalize_db_url  # noqa: E402
+
 
 def _connect(url: str):
     import psycopg
@@ -16,7 +19,7 @@ def main(database_url: str | None, connect=_connect) -> int:
         print("실패: DATABASE_URL 없음")
         return 1
     try:
-        conn = connect(database_url)
+        conn = connect(normalize_db_url(database_url))
         try:
             count = conn.execute("select count(*) from tf_settings").fetchone()[0]
         finally:

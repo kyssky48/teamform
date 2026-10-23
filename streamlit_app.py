@@ -131,10 +131,10 @@ def on_vote(applicant_no: str, yes: bool) -> None:
 @st.fragment(run_every=REFRESH_SECONDS)
 def student_board() -> None:
     account = me()
-    if account is None or not still_valid(account):
+    b = service.board(store, account) if account else None
+    if b is None or not b.viewer_exists:  # 질의를 따로 하지 않고 현황으로 판단
         logout()
         st.rerun(scope="app")
-    b = service.board(store, account)
     if b.closed:
         st.info("모집이 마감되었습니다.")
     if b.my_team:
@@ -155,7 +155,7 @@ def student_board() -> None:
             st.button("이 팀에 지원", key=f"apply_{team.team_id}", disabled=not b.can_apply,
                       on_click=on_apply, args=(team.team_id,))
             if team.team_id == b.my_team and team.pending:
-                st.markdown("기다리는 지원")
+                st.markdown("들어온 지원")
                 for pv in team.pending:
                     vote_row(pv)
     show_result()
@@ -169,6 +169,8 @@ def vote_row(pv: service.PendingView) -> None:
     c2.button("거부", key=f"vote_no_{no}", disabled=not pv.can_vote, on_click=on_vote, args=(no, False))
     if pv.my_vote:
         c3.write(f"내 투표: {pv.my_vote}")
+    elif pv.status != "대기":
+        c3.caption(f"결과: {pv.status}")
 
 
 # ---- 관리자 화면 ----
@@ -237,8 +239,7 @@ def plan_table() -> None:
 @st.fragment(run_every=REFRESH_SECONDS)
 def admin_board() -> None:
     account = me()
-    if account is None or not still_valid(account):
-        logout()
+    if account is None:
         st.rerun(scope="app")
     b = service.board(store, account)
     st.subheader("현황")
