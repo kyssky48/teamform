@@ -127,12 +127,31 @@ def test_infeasible_empty_team_short():
     assert infeasible_reason(teams, un) == "빈 팀을 2명 이상으로 채울 학생이 모자람"
 
 
-def test_infeasible_cross_team():
-    # 팀1, 팀2 모두 웹 프로그래머가 필요하지만 맡을 학생은 1명뿐
+def test_infeasible_role_shortage_across_teams():
+    # 팀1, 팀2 모두 웹 프로그래머가 필요하지만 맡을 학생은 1명뿐 (팀마다 따로 보면 가능)
     teams = {1: [S("PL"), S("FD")], 2: [S("PL"), S("TT")]}
     un = [S("WP")]
     assert solve(teams, un) is None
-    assert infeasible_reason(teams, un) == "팀 사이에 학생을 나눌 방법이 없음"
+    assert infeasible_reason(teams, un) == (
+        "웹 프로그래머를 맡을 학생이 1명 모자람 (필요한 팀: 팀1, 팀2 / 맡을 수 있는 남은 학생: 1명)")
+
+
+def test_infeasible_distinct_people_shortage():
+    # 빈 팀 2개에 기획자·웹 프로그래머가 서로 다른 학생으로 2명씩(모두 4명) 필요한데, 맡을 수 있는 학생은 2명
+    teams = {1: [S("PL"), S("WP")], 2: [], 3: []}
+    un = [S("PL", "WP"), S("WP", "PL"), S("FD"), S("TT")]
+    assert solve(teams, un) is None
+    assert infeasible_reason(teams, un) == (
+        "기획자와 웹 프로그래머를 맡을 학생이 2명 모자람 (필요한 자리: 4개 / 맡을 수 있는 남은 학생: 2명)")
+
+
+def test_infeasible_main_role_overflow():
+    # 주 역할이 프론트엔드 디자이너인 남은 학생 3명을, 그 역할이 없는 팀 2개(팀2, 팀3)에만 넣을 수 있음
+    teams = {1: [S("FD", "WP"), S("TT", "PL")], 2: [], 3: []}
+    un = [S("FD", "PL", "WP"), S("WP", "RW"), S("WP"), S("TT", "PL"), S("FD"), S("FD", "PT")]
+    assert solve(teams, un) is None
+    assert infeasible_reason(teams, un) == (
+        "주 역할이 프론트엔드 디자이너인 학생 3명을 받을 수 있는 팀이 2개뿐 (팀2, 팀3)")
 
 
 def test_solve_no_unassigned_valid_teams():
@@ -152,3 +171,12 @@ def test_infeasible_reason_names_the_role_the_pool_lacks():
     un = [S("PL"), S("FD"), S("TT")]
     assert solve(teams, un) is None
     assert infeasible_reason(teams, un) == "팀2에 웹 프로그래머를 맡을 학생이 없음"
+
+
+def test_infeasible_cross_team_fallback():
+    # 팀1(빈 팀)과 팀3이 모두 남은 학생 중 기획자를 맡을 수 있는 유일한 학생(PL;PT)을 필요로 함
+    # 역할별 수와 주 역할 겹침만으로는 드러나지 않음(무작위 사례에서 찾은 가장 작은 예)
+    teams = {1: [], 2: [S("PL"), S("WP", "TT")], 3: [S("WP", "PL", "TT"), S("FD", "PT")]}
+    un = [S("WP"), S("RW"), S("FD", "WP"), S("PL", "PT")]
+    assert solve(teams, un) is None
+    assert infeasible_reason(teams, un) == "팀 사이에 학생을 나눌 방법이 없음"

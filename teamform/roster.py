@@ -21,16 +21,19 @@ def parse_roster(data: bytes) -> list[Student]:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError:
         raise RosterError("UTF-8 파일이 아님")
-    rows = list(csv.reader(io.StringIO(text)))
-    rows = [r for r in rows if any(c.strip() for c in r)]
-    if not rows or [_clean(c) for c in rows[0]] != COLUMNS:
+    reader = csv.reader(io.StringIO(text))
+    # (파일의 줄 번호, 칸들). 빈 줄은 건너뛰되 줄 번호는 실제 파일 기준으로 셈
+    rows = [(reader.line_num, r) for r in reader if any(c.strip() for c in r)]
+    if not rows or [_clean(c) for c in rows[0][1]] != COLUMNS:
         raise RosterError("첫 줄은 student_no,name,main_role,sub_roles 이어야 함")
     if len(rows) == 1:
         raise RosterError("학생이 한 명도 없음")
 
+    header_line = rows[0][0]
     students: list[Student] = []
     seen: set[str] = set()
-    for line, row in enumerate(rows[1:], start=1):
+    for file_line, row in rows[1:]:
+        line = file_line - header_line  # 헤더 다음 줄이 1번째 줄
         where = f"{line}번째 줄"
         if len(row) != 4:
             raise RosterError(f"{where}: 열이 4개가 아님")

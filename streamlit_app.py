@@ -85,7 +85,7 @@ def logout() -> None:
 def still_valid(account: Account) -> bool:
     """명단을 다시 올려 학생이 사라졌으면 로그인 화면으로."""
     found = store.get_login(account.student_no)
-    return found is not None and found[0].is_admin == account.is_admin
+    return found is not None and found[0].is_admin == account.is_admin and found[0].name == account.name
 
 
 # ---- 로그인 ----
@@ -202,12 +202,13 @@ def admin_controls() -> None:
     st.subheader("마감과 배정")
     st.button("모집 마감", key="admin_close", on_click=on_close)
     clicked = st.button("AI 배정", key="admin_assign")
+    if clicked:  # 다시 누르면 이전 진행 안내를 그리지 않고 새로 시작
+        st.session_state["assign_log"] = []
     status_box = st.container(key="assign_status")
     with status_box:
         for line in st.session_state.get("assign_log", []):
             st.write(line)
     if clicked:
-        st.session_state["assign_log"] = []
 
         def on_status(text: str) -> None:
             st.session_state["assign_log"].append(text)

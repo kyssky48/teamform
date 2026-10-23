@@ -147,4 +147,45 @@ def infeasible_reason(teams: dict[int, list[Student]], unassigned: list[Student]
     empty = sum(1 for ms in teams.values() if not ms)
     if empty * MIN_TEAM > len(unassigned):
         return NO_ASSIGNMENT_EMPTY
-    return NO_ASSIGNMENT_CROSS
+    return _main_role_overflow(teams, unassigned) or _role_shortage(teams, unassigned) or NO_ASSIGNMENT_CROSS
+
+
+def _main_role_overflow(teams: dict[int, list[Student]], unassigned: list[Student]) -> str | None:
+    """주 역할이 같은 남은 학생 수가, 그 주 역할이 없고 자리가 남은 팀 수보다 많은지 셈."""
+    for role in ROLES:
+        k = sum(1 for s in unassigned if s.main_role == role)
+        open_teams = [t for t in sorted(teams)
+                      if len(teams[t]) < MAX_TEAM and all(m.main_role != role for m in teams[t])]
+        if k > len(open_teams):
+            names = ", ".join(f"팀{t}" for t in open_teams)
+            where = f" ({names})" if names else ""
+            return f"주 역할이 {role}인 학생 {k}명을 받을 수 있는 팀이 {len(open_teams)}개뿐{where}"
+    return None
+
+
+def _role_shortage(teams: dict[int, list[Student]], unassigned: list[Student]) -> str | None:
+    """팀마다 따로 보면 되지만 함께는 안 될 때, 남은 학생 가운데 필수 역할을 맡을 수 있는 수가 모자란지 셈."""
+    need = {PL: [], WP: []}
+    slots = 0  # 남은 학생으로 채워야 하는 필수 역할 자리 수
+    for t in sorted(teams):
+        ms = teams[t]
+        missing = missing_required(ms)
+        slots += missing
+        if missing == 2:
+            need[PL].append(t)
+            need[WP].append(t)
+        elif missing == 1 and not any(m.can(PL) for m in ms):
+            need[PL].append(t)
+        elif missing == 1 and not any(m.can(WP) for m in ms):
+            need[WP].append(t)
+    for role in (PL, WP):
+        able = sum(1 for s in unassigned if s.can(role))
+        if len(need[role]) > able:
+            names = ", ".join(f"팀{t}" for t in need[role])
+            return (f"{role}를 맡을 학생이 {len(need[role]) - able}명 모자람 "
+                    f"(필요한 팀: {names} / 맡을 수 있는 남은 학생: {able}명)")
+    able = sum(1 for s in unassigned if s.can(PL) or s.can(WP))
+    if slots > able:
+        return (f"기획자와 웹 프로그래머를 맡을 학생이 {slots - able}명 모자람 "
+                f"(필요한 자리: {slots}개 / 맡을 수 있는 남은 학생: {able}명)")
+    return None

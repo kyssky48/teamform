@@ -65,3 +65,11 @@ def test_parse_errors(body, line):
 def test_parse_empty_or_wrong_header(data):
     with pytest.raises(RosterError):
         parse_roster(data)
+
+
+def test_error_line_counts_blank_lines():
+    # 헤더 다음 줄이 1번째 줄. 빈 줄도 세어 실제 파일의 줄과 맞춤
+    data = (HEADER + "2026101,학생1,기획자,\n\n\n2026102,학생2,요리사,\n").encode("utf-8-sig")
+    with pytest.raises(RosterError) as e:
+        parse_roster(data)
+    assert "4번째 줄" in str(e.value)

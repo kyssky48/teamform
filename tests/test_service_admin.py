@@ -1,6 +1,6 @@
 # 생성: 2026-10-21 22:20 (KST)
 from teamform import auth, rules, service
-from teamform.model import REJECTED
+from teamform.model import REJECTED, Student
 from tests.conftest import ADMIN, acct
 from tests.helpers import S
 
@@ -200,3 +200,13 @@ def test_closed_rejections_not_shown_as_votable(make_store):
     service.apply(st, acct(b), 1)
     service.close(st, ADMIN)
     assert service.board(st, acct(a)).teams[0].pending == []
+
+
+def test_viewer_logged_out_when_same_number_is_now_another_student(make_store):
+    st, (a,) = started(make_store, [("PL",)])
+    me = acct(a)
+    same_no_other_person = Student(a.student_no, "다른학생", "웹 프로그래머", ())
+    service.start(st, ADMIN, csv_of([same_no_other_person]), 3)
+    assert not service.board(st, me).viewer_exists
+    service.start(st, ADMIN, csv_of([a]), 3)  # 같은 사람이 그대로 있으면 로그인 유지
+    assert service.board(st, me).viewer_exists

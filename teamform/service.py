@@ -229,7 +229,8 @@ def board(store: Store, viewer: Account) -> Board:
         teams.append(TeamView(t, members, pending))
     can_apply = not viewer.is_admin and not closed and my_team is None and my_pending is None
     unassigned = [s for no, s in sorted(snap.students.items()) if no not in team_of]
-    viewer_exists = viewer.is_admin or me in snap.students
+    # 명단을 다시 올려 그 학번이 사라졌거나 다른 학생(이름이 다름)이 되었으면 로그인 화면으로
+    viewer_exists = viewer.is_admin or (me in snap.students and snap.students[me].name == viewer.name)
     return Board(teams, closed, my_team, my_pending, can_apply, unassigned, viewer_exists)
 
 # ---- AI 배정 (공고 2.5절 3~8항) ----

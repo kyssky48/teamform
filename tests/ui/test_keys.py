@@ -242,3 +242,12 @@ def test_practice_scenario_by_keys(new_page, scenario):
     login(fresh, people[1][0], "1234")
     for t in range(1, teams + 1):
         assert key(fresh, f"team_{t}").inner_text()
+
+
+def test_assign_again_shows_only_new_progress(new_page):
+    admin = start_as_admin(new_page, "쉬움", 3)
+    click(admin, "admin_close")
+    click(admin, "admin_assign", timeout_s=420)
+    click(admin, "admin_assign", timeout_s=420)  # 다시 눌러도 이전 진행 안내와 섞이지 않아야 함
+    status = key(admin, "assign_status").inner_text()
+    assert status.count("1차 모델(") == 1, status
