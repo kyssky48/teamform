@@ -57,3 +57,11 @@ def run_scenario(st, name, team_count, steps, assign=assign_and_confirm):
 @pytest.mark.parametrize("scenario", ALL, ids=lambda s: s[0])
 def test_practice_scenario(scenario):
     run_scenario(MemoryStore(), *scenario)
+
+
+@pytest.mark.parametrize("scenario", ALL, ids=lambda s: s[0])
+def test_practice_scenario_on_real_db(scenario):
+    """TEAMFORM_PG_TESTS=1 일 때만 실제 DB(PgStore)로 같은 시나리오를 돌림."""
+    from tests.test_store_contract import _pg_store
+
+    run_scenario(_pg_store(), *scenario)

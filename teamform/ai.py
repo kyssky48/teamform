@@ -39,6 +39,16 @@ def with_deadline(fn: Callable[[], T], seconds: float) -> T:
         pool.shutdown(wait=False, cancel_futures=True)
 
 
+def _error_message(resp, api_key: str) -> str:
+    """OpenRouter 오류 설명(예: 무료 제공 종료, 사용량 초과)을 짧게 붙임. 실패 기록과 README 근거용."""
+    try:
+        text = str(resp.json()["error"]["message"])
+    except (ValueError, KeyError, TypeError):
+        return ""
+    text = " ".join(text.replace(api_key, "").split()) if api_key else " ".join(text.split())
+    return f": {text[:140]}" if text else ""
+
+
 def openrouter_caller(api_key: str) -> ModelCaller:
     def call(model: str, prompt: str) -> str:
         try:
@@ -56,7 +66,7 @@ def openrouter_caller(api_key: str) -> ModelCaller:
         except requests.RequestException as e:
             raise AIError(f"연결 오류({type(e).__name__})") from None
         if resp.status_code != 200:
-            raise AIError(f"HTTP {resp.status_code}")
+            raise AIError(f"HTTP {resp.status_code}{_error_message(resp, api_key)}")
         try:
             body = resp.json()
             content = body["choices"][0]["message"].get("content") or ""

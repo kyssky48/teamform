@@ -101,3 +101,28 @@ def test_secret_status_never_returns_values(monkeypatch):
     assert status["OPENROUTER_API_KEY"] == "있음"
     assert "sk-or-v1-abc" not in repr(status)
     assert config.get_secret("OPENROUTER_API_KEY") == "sk-or-v1-abc"
+
+
+def test_db_url_with_special_chars_in_password_is_encoded():
+    from urllib.parse import unquote, urlsplit
+
+    raw = "postgresql://postgres.abcd:p@ss:w/rd#1@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+    fixed = config.normalize_db_url(raw)
+    parts = urlsplit(fixed)
+    assert parts.hostname == "aws-0-ap-northeast-2.pooler.supabase.com" and parts.port == 5432
+    assert parts.username == "postgres.abcd" and unquote(parts.password) == "p@ss:w/rd#1"
+    ok = "postgresql://postgres.abcd:plain123@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+    assert config.normalize_db_url(ok) == ok
+    encoded = "postgresql://postgres.abcd:p%40ss@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+    assert config.normalize_db_url(encoded) == encoded  # 이미 바꿔 둔 것은 그대로
+    assert config.normalize_db_url(" " + ok + "\n") == ok
+
+
+def test_openrouter_error_message_is_kept(monkeypatch):
+    body = {"error": {"message": "The free launch period ended; the :free variant has been retired " + "x" * 300, "code": 404}}
+    monkeypatch.setattr(ai.requests, "post", lambda *a, **k: FakeResp(404, body))
+    with pytest.raises(ai.AIError) as e:
+        ai.openrouter_caller("sk-or-v1-secret")("m", "p")
+    msg = str(e.value)
+    assert msg.startswith("HTTP 404: The free launch period ended") and len(msg) <= 160
+    assert "sk-or-v1-secret" not in msg

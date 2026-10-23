@@ -19,7 +19,7 @@ SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 
 _STUDENT_SQL = """
 select s.student_no, s.name, s.main_role,
-       coalesce(array_agg(r.role order by r.position) filter (where r.role is not null), '{}')
+       coalesce(array_agg(r.role order by r.position) filter (where r.role is not null), '{{}}')
 from tf_students s left join tf_student_sub_roles r on r.student_id = s.id
 where not s.is_admin {where}
 group by s.id order by s.student_no
