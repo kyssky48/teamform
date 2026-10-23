@@ -179,7 +179,7 @@ def test_vote_after_another_member_rejected(new_page):
     assert result(a).startswith("거절"), result(a)
 
 
-@pytest.mark.parametrize("scenario", [MEDIUM, HARD], ids=lambda s: s[0])
+@pytest.mark.parametrize("scenario", [MEDIUM, HARD], ids=["medium", "hard"])
 def test_practice_scenario_by_keys(new_page, scenario):
     """중간·어려움 시나리오를 key만 써서 끝까지 실행. TEAMFORM_SHOTS가 있으면 단계마다 화면을 저장."""
     name, teams, steps = scenario
