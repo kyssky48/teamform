@@ -26,10 +26,17 @@ def store(request):
     if request.param == "memory":
         st = MemoryStore()
         st.upsert_admin("hash-admin")
+        yield st
     else:
         st = _pg_store()  # 실제 DB의 관리자 계정은 건드리지 않음(배포 앱과 같은 DB라 로그인이 막힘)
         assert st.get_login("admin"), "실제 DB에 관리자 계정이 있어야 함"
-    return st
+        yield st
+        remove_test_ai_logs(st)
+
+
+def remove_test_ai_logs(st) -> None:
+    """시험이 남긴 AI 기록을 지움. 시험용 모델 이름엔 '/'가 없고 실제 모델 이름엔 늘 있음(README 근거 표를 깨끗이)."""
+    st._q("delete from tf_ai_logs where position('/' in model) = 0")
 
 
 def two(store):

@@ -63,7 +63,11 @@ def test_practice_scenario(scenario):
 def test_practice_scenario_on_real_db(scenario):
     """TEAMFORM_PG_TESTS=1 일 때만 실제 DB(PgStore)로 같은 시나리오를 돌림."""
     from teamform import config
-    from tests.test_store_contract import _pg_store
+    from tests.test_store_contract import _pg_store, remove_test_ai_logs
 
     # 배포 앱과 같은 DB이므로 관리자 비밀번호는 실제 값 그대로 둠
-    run_scenario(_pg_store(), *scenario, admin_pw=config.get_secret("ADMIN_PASSWORD"))
+    store = _pg_store()
+    try:
+        run_scenario(store, *scenario, admin_pw=config.get_secret("ADMIN_PASSWORD"))
+    finally:
+        remove_test_ai_logs(store)
