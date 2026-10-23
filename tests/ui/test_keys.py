@@ -53,10 +53,11 @@ def test_easy_scenario_by_keys(new_page):
             p = admin
             click(admin, "admin_close")
         elif action == "assign_confirm":
-            click(admin, "admin_assign")
+            click(admin, "admin_assign", timeout_s=420)  # 실제 AI는 모델마다 최대 120초
             status = key(admin, "assign_status").inner_text()
-            assert "1차 모델" in status and "2차 모델" in status and "3차 모델" in status, status
-            assert result(admin) == "승인: 3차까지 실패해 앱이 배정안을 만듦", result(admin)
+            assert "1차 모델" in status, status  # 몇 차 모델을 기다리는지 보여 줌
+            # 로컬 시험은 가짜 AI(늘 실패), 배포 앱은 실제 AI라 둘 중 하나
+            assert re.match(r"^승인: (3차까지 실패해 앱이 배정안을 만듦|[123]차 모델\(.+\)의 배정안을 받음)$", result(admin)), result(admin)
             click(admin, "admin_confirm")
             assert result(admin) == "승인: 배정을 확정함", result(admin)
             continue

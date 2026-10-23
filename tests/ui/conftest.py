@@ -60,27 +60,50 @@ def new_page(browser, app_url):
     """학생마다 새 브라우저 문맥(쿠키, 세션 따로)을 연다."""
     contexts = []
 
-    def _open() -> Page:
+    def _open() -> "AppView":
         ctx = browser.new_context()
         contexts.append(ctx)
         page = ctx.new_page()
-        page.goto(app_url)
-        page.locator(".st-key-login_student_no input").wait_for(timeout=20000)
-        return page
+        page.goto(app_url, timeout=60000)
+        frame = page.main_frame
+        if "streamlit.app" in app_url:  # Streamlit Cloud는 앱을 iframe 안에 띄움
+            frame = page.wait_for_selector('iframe[title="streamlitApp"]', timeout=60000).content_frame()
+        view = AppView(page, frame)
+        view.locator(".st-key-login_student_no input").wait_for(timeout=60000)
+        return view
 
     yield _open
     for c in contexts:
         c.close()
 
 
-def settle(page: Page) -> None:
+class AppView:
+    """앱이 그려진 frame(로컬은 페이지 자체, 배포 앱은 iframe)을 페이지처럼 다루게 함."""
+
+    def __init__(self, page: Page, frame):
+        self.page, self.frame = page, frame
+
+    def locator(self, selector: str):
+        return self.frame.locator(selector)
+
+    def wait_for_selector(self, selector: str, **kw):
+        return self.frame.wait_for_selector(selector, **kw)
+
+    def wait_for_timeout(self, ms: float) -> None:
+        self.page.wait_for_timeout(ms)
+
+    def content(self) -> str:
+        return self.frame.content()
+
+
+def settle(page: Page, timeout_s: float = 60) -> None:
     """Streamlit이 다시 그리기를 마칠 때까지 기다림(stApp의 data-test-script-state)."""
     try:
         page.wait_for_selector('[data-testid="stApp"][data-test-script-state="running"]', timeout=2000)
     except PlaywrightTimeout:
         pass  # 이미 끝났거나 아주 빨리 끝남
     # 3초 자동 갱신(fragment)의 실행 끝을 클릭 실행의 끝으로 잘못 보지 않도록, 0.8초 동안 조용할 때까지 기다림
-    quiet, deadline = 0, time.time() + 60
+    quiet, deadline = 0, time.time() + timeout_s
     while quiet < 8 and time.time() < deadline:
         state = page.locator('[data-testid="stApp"]').get_attribute("data-test-script-state")
         quiet = 0 if state == "running" else quiet + 1
@@ -91,9 +114,9 @@ def key(page: Page, k: str):
     return page.locator(f".st-key-{k}")
 
 
-def click(page: Page, k: str) -> None:
+def click(page: Page, k: str, timeout_s: float = 60) -> None:
     key(page, k).locator("button").click()
-    settle(page)
+    settle(page, timeout_s)
 
 
 def result(page: Page) -> str:
