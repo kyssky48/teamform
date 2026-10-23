@@ -2,6 +2,7 @@
 """저장소 인터페이스(Store)와 시험·로컬용 메모리 저장소(MemoryStore)."""
 import threading
 from collections.abc import Iterator
+from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from typing import ContextManager, Protocol
@@ -9,6 +10,7 @@ from typing import ContextManager, Protocol
 from teamform.model import PENDING, REJECTED, Account, Application, Student
 
 CLOSE_REASON = "모집 마감"
+KST = timezone(timedelta(hours=9), "KST")  # 배포 서버는 UTC라 화면에는 한국 시각으로 바꿔 보여 줌(공고 4.4절)
 
 
 @dataclass
@@ -50,6 +52,7 @@ class Store(Protocol):
     def set_setting(self, key: str, value: str | None) -> None: ...
     def log_ai(self, tier: int, model: str, outcome: str, detail: str, elapsed_ms: int) -> None: ...
     def snapshot(self) -> Snapshot: ...
+    def recent_ai_logs(self, limit: int) -> list[dict]: ...
 
 
 ADMIN_NO = "admin"
@@ -70,7 +73,7 @@ class MemoryStore:
         self._next_app = 1
         self._votes: dict[int, dict[str, str]] = {}
         self._settings: dict[str, str] = {}
-        self.ai_logs: list[tuple[int, str, str, str, int]] = []
+        self.ai_logs: list[tuple[int, str, str, str, int, datetime]] = []
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
@@ -182,7 +185,14 @@ class MemoryStore:
             self._settings[key] = value
 
     def log_ai(self, tier: int, model: str, outcome: str, detail: str, elapsed_ms: int) -> None:
-        self.ai_logs.append((tier, model, outcome, detail, elapsed_ms))
+        self.ai_logs.append((tier, model, outcome, detail, elapsed_ms, datetime.now(timezone.utc)))
+
+    def recent_ai_logs(self, limit: int) -> list[dict]:
+        keys = ("tier", "model", "outcome", "detail", "elapsed_ms", "created_at")
+        rows = [dict(zip(keys, r)) for r in reversed(self.ai_logs[-limit:])]
+        for r in rows:
+            r["created_at"] = r["created_at"].astimezone(KST)
+        return rows
 
     def snapshot(self) -> Snapshot:
         with self._lock:

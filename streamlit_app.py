@@ -219,6 +219,22 @@ def admin_controls() -> None:
         set_result(outcome)
     plan_table()
     st.button("배정안 확정", key="admin_confirm", on_click=on_confirm)
+    ai_log_table()
+
+
+def ai_log_table() -> None:
+    """AI 호출 기록(tf_ai_logs). 실패 처리(120초 제한, 다음 모델로 넘김)를 나중에 확인하는 근거."""
+    logs = store.recent_ai_logs(20)
+    with st.expander(f"AI 호출 기록 (최근 {len(logs)}건, 한국 시각)"):
+        if not logs:
+            st.caption("아직 없음")
+            return
+        st.dataframe(
+            [{"시각": x["created_at"].strftime("%m-%d %H:%M:%S"), "차수": f"{x['tier']}차", "모델": x["model"],
+              "결과": x["outcome"], "내용": x["detail"], "걸린 시간(초)": round(x["elapsed_ms"] / 1000, 1)}
+             for x in logs],
+            hide_index=True, width="stretch",
+        )
 
 
 def plan_table() -> None:

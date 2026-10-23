@@ -13,7 +13,7 @@ from contextlib import contextmanager
 import psycopg
 
 from teamform.model import PENDING, REJECTED, Account, Application, Student
-from teamform.store import ADMIN_NO, Snapshot
+from teamform.store import ADMIN_NO, KST, Snapshot
 
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "schema.sql")
 
@@ -318,6 +318,14 @@ class PgStore:
             "insert into tf_ai_logs (tier, model, outcome, detail, elapsed_ms) values (%s, %s, %s, %s, %s)",
             (tier, model, outcome, detail, elapsed_ms),
         )
+
+    def recent_ai_logs(self, limit: int) -> list[dict]:
+        rows = self._q(
+            "select tier, model, outcome, detail, elapsed_ms, created_at from tf_ai_logs order by id desc limit %s",
+            (limit,),
+        )
+        keys = ("tier", "model", "outcome", "detail", "elapsed_ms", "created_at")
+        return [dict(zip(keys, r[:5] + (r[5].astimezone(KST),))) for r in rows]
 
     def snapshot(self) -> Snapshot:
         data = self._q(_SNAPSHOT_SQL)[0][0]

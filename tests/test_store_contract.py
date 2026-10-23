@@ -153,3 +153,14 @@ def test_snapshot_rejected_latest_only(store):
     assert snap.rejected == [] and [x.id for x in snap.pending] == [new.id]
     store.set_application_status(new.id, "거절", "모집 마감")
     assert store.snapshot().rejected == []
+
+
+def test_recent_ai_logs_newest_first_in_kst(store):
+    two(store)
+    store.log_ai(1, "m1:free", "실패", "HTTP 429", 800)
+    store.log_ai(2, "m2:free", "성공", "", 30000)
+    logs = store.recent_ai_logs(10)
+    assert [(x["tier"], x["model"], x["outcome"], x["detail"], x["elapsed_ms"]) for x in logs[:2]] == [
+        (2, "m2:free", "성공", "", 30000), (1, "m1:free", "실패", "HTTP 429", 800)]
+    assert str(logs[0]["created_at"].tzinfo) in ("Asia/Seoul", "KST")  # 화면에는 한국 시각(공고 4.4절)
+    assert len(store.recent_ai_logs(1)) == 1
