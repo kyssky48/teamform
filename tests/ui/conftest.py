@@ -64,13 +64,18 @@ def new_page(browser, app_url):
         ctx = browser.new_context()
         contexts.append(ctx)
         page = ctx.new_page()
-        page.goto(app_url, timeout=60000)
-        frame = page.main_frame
-        if "streamlit.app" in app_url:  # Streamlit Cloud는 앱을 iframe 안에 띄움
-            frame = page.wait_for_selector('iframe[title="streamlitApp"]', timeout=60000).content_frame()
-        view = AppView(page, frame)
-        view.locator(".st-key-login_student_no input").wait_for(timeout=60000)
-        return view
+        for attempt in range(3):  # Streamlit Cloud가 가끔 앱 iframe을 숨긴 채 멈춤: 다시 열어 봄
+            try:
+                page.goto(app_url, timeout=60000)
+                frame = page.main_frame
+                if "streamlit.app" in app_url:  # Streamlit Cloud는 앱을 iframe 안에 띄움
+                    frame = page.wait_for_selector('iframe[title="streamlitApp"]', timeout=60000).content_frame()
+                view = AppView(page, frame)
+                view.locator(".st-key-login_student_no input").wait_for(timeout=60000)
+                return view
+            except PlaywrightTimeout:
+                if attempt == 2:
+                    raise
 
     yield _open
     for c in contexts:

@@ -1,5 +1,6 @@
 # 생성: 2026-10-21 22:23 (KST)
 import json
+import re
 import time
 
 from teamform import ai, rules, service
@@ -121,3 +122,18 @@ def test_assign_nobody_left(make_store):
     service.close(st, ADMIN)
     assert service.assign(st, ADMIN, lambda m, p: "", MODELS, lambda s: None) == "승인: 배정할 학생이 없음"
     assert service.confirm(st, ADMIN) == "승인: 배정을 확정함"
+
+
+def test_assign_reports_elapsed_while_waiting(make_store):
+    # Streamlit Cloud는 오래 아무것도 보내지 않으면 연결을 끊음(추정): 기다리는 동안 경과 시간을 계속 알림
+    st = closed_store(make_store)
+    ticks = []
+
+    def slow_good(model, prompt):
+        time.sleep(0.35)
+        return good_answer(st)
+
+    msg = service.assign(st, ADMIN, slow_good, MODELS, lambda s: None, on_tick=ticks.append, tick_every=0.1)
+    assert msg.startswith("승인: 1차 모델")
+    assert len(ticks) >= 2
+    assert all(re.fullmatch(r"1차 모델\(a/one:free\) 응답을 기다리는 중 \(\d+초 / 120초\)", t) for t in ticks), ticks

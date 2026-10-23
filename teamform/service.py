@@ -244,7 +244,11 @@ def assign(
     models: list[str],
     on_status: Callable[[str], None],
     deadline_s: float = 120,
+    on_tick: Callable[[str], None] | None = None,
+    tick_every: float = 2.0,
 ) -> str:
+    """on_tick을 주면 모델 응답을 기다리는 동안 tick_every초마다 경과 시간을 알림.
+    Streamlit Cloud는 오래 아무것도 보내지 않으면 브라우저 연결을 끊는 것으로 보여(추정), 화면을 계속 갱신함."""
     if not actor.is_admin:
         return ADMIN_ONLY
     if not is_closed(store):
@@ -264,7 +268,11 @@ def assign(
         on_status(f"{tier}차 모델({model}) 응답을 기다리는 중 (최대 {deadline_s:g}초)")
         t0 = time.monotonic()
         try:
-            plan = parse_plan(with_deadline(lambda: caller(model, prompt), deadline_s))
+            tick = None
+            if on_tick:
+                def tick(elapsed: float, tier=tier, model=model) -> None:
+                    on_tick(f"{tier}차 모델({model}) 응답을 기다리는 중 ({int(elapsed)}초 / {deadline_s:g}초)")
+            plan = parse_plan(with_deadline(lambda: caller(model, prompt), deadline_s, tick, tick_every))
             errs = validate_plan(teams, left, plan)
             if errs:
                 raise AIError("배정안 검사 실패: " + "; ".join(errs[:3]))

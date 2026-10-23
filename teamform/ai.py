@@ -2,6 +2,7 @@
 """OpenRouter 호출, 모델마다 전체 대기 시간 제한, 응답 해석 (공고 2.5절, 4.3절)."""
 import json
 import re
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
@@ -26,15 +27,25 @@ class AITimeout(AIError):
     pass
 
 
-def with_deadline(fn: Callable[[], T], seconds: float) -> T:
+def with_deadline(
+    fn: Callable[[], T], seconds: float, tick: Callable[[float], None] | None = None, tick_every: float = 2.0
+) -> T:
     """fn을 따로 돈 스레드에서 실행하고, 부른 때부터 seconds가 지나면 기다리지 않고 AITimeout.
-    응답이 천천히 흘러 들어와도 전체 시간으로 끊는다(3장 "AI 응답이 늦을 때"의 어려운 해결)."""
+    응답이 천천히 흘러 들어와도 전체 시간으로 끊는다(3장 "AI 응답이 늦을 때"의 어려운 해결).
+    tick을 주면 기다리는 동안 tick_every초마다 경과 시간(초)을 알려 줌."""
     pool = ThreadPoolExecutor(max_workers=1)
     future = pool.submit(fn)
+    start = time.monotonic()
     try:
-        return future.result(timeout=seconds)
-    except FutureTimeout:
-        raise AITimeout(f"{seconds:g}초 안에 응답을 다 받지 못함") from None
+        while True:
+            remaining = seconds - (time.monotonic() - start)
+            if remaining <= 0:
+                raise AITimeout(f"{seconds:g}초 안에 응답을 다 받지 못함")
+            try:
+                return future.result(timeout=min(remaining, tick_every) if tick else remaining)
+            except FutureTimeout:
+                if tick and time.monotonic() - start < seconds:
+                    tick(time.monotonic() - start)
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
 

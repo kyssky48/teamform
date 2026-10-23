@@ -126,3 +126,16 @@ def test_openrouter_error_message_is_kept(monkeypatch):
     msg = str(e.value)
     assert msg.startswith("HTTP 404: The free launch period ended") and len(msg) <= 160
     assert "sk-or-v1-secret" not in msg
+
+
+def test_with_deadline_ticks_while_waiting():
+    ticks = []
+    assert ai.with_deadline(lambda: time.sleep(0.55) or "done", 2, tick=ticks.append, tick_every=0.1) == "done"
+    assert len(ticks) >= 3 and ticks == sorted(ticks) and all(0 < t < 1 for t in ticks)
+
+
+def test_with_deadline_ticks_then_times_out():
+    ticks = []
+    with pytest.raises(ai.AITimeout):
+        ai.with_deadline(lambda: time.sleep(1), 0.35, tick=ticks.append, tick_every=0.1)
+    assert ticks and max(ticks) < 0.4

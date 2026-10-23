@@ -215,7 +215,10 @@ def admin_controls() -> None:
 
         with status_box:
             with st.spinner("AI가 배정안을 만드는 중"):
-                outcome = service.assign(store, me(), get_caller(), config.MODELS, on_status)
+                waiting = st.empty()  # 기다리는 동안 2초마다 경과 시간을 다시 씀(연결이 끊기지 않게)
+                outcome = service.assign(store, me(), get_caller(), config.MODELS, on_status,
+                                         on_tick=waiting.caption)
+                waiting.empty()
         # 다시 실행(st.rerun)하지 않음: 아래의 배정안 표, 확정 단추, 현황이 이 실행에서 바로 새 상태로 그려짐
         set_result(outcome)
     plan_table()
