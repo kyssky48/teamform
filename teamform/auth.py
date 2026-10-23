@@ -29,10 +29,15 @@ def ensure_admin(store: Store, admin_password: str) -> None:
     store.upsert_admin(hash_password(admin_password))
 
 
-def login(store: Store, student_no: str, password: str) -> Account | None:
+def login(store: Store, student_no: str, password: str, admin_password: str | None = None) -> Account | None:
+    """admin_password를 주면 관리자 로그인 때마다 관리자 계정을 그 값으로 맞춘 뒤 확인함
+    (DB의 해시가 다른 이유로 바뀌어도 Secrets의 ADMIN_PASSWORD로 로그인되게)."""
     if not student_no or not password:
         return None
-    found = store.get_login(student_no.strip())
+    student_no = student_no.strip()
+    if student_no == ADMIN_NO and admin_password:
+        ensure_admin(store, admin_password)
+    found = store.get_login(student_no)
     if found is None:
         return None
     account, hashed = found

@@ -98,7 +98,8 @@ def login_page() -> None:
         st.text_input("비밀번호", type="password", key="login_password")
         submitted = st.form_submit_button("로그인", key="login_submit")
     if submitted:
-        account = auth.login(store, st.session_state.login_student_no, st.session_state.login_password)
+        account = auth.login(store, st.session_state.login_student_no, st.session_state.login_password,
+                             admin_password=config.get_secret("ADMIN_PASSWORD"))
         if account is None:
             set_result("막힘: 학번이나 비밀번호가 틀림")
         else:

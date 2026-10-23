@@ -23,8 +23,12 @@ def _pg_store():
 
 @pytest.fixture(params=["memory", "pg"])
 def store(request):
-    st = MemoryStore() if request.param == "memory" else _pg_store()
-    st.upsert_admin("hash-admin")
+    if request.param == "memory":
+        st = MemoryStore()
+        st.upsert_admin("hash-admin")
+    else:
+        st = _pg_store()  # 실제 DB의 관리자 계정은 건드리지 않음(배포 앱과 같은 DB라 로그인이 막힘)
+        assert st.get_login("admin"), "실제 DB에 관리자 계정이 있어야 함"
     return st
 
 
@@ -45,7 +49,7 @@ def test_students_roundtrip(store):
     acc, h = store.get_login("t001")
     assert (acc.name, acc.is_admin, h) == ("가", False, "hash-student")
     acc, h = store.get_login("admin")
-    assert acc.is_admin and h == "hash-admin"
+    assert acc.is_admin and h.startswith(("hash-admin", "$2"))
     assert store.get_login("nope") is None
 
 

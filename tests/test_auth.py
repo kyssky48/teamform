@@ -59,3 +59,13 @@ def test_hash_roundtrip():
 def test_student_named_admin_cannot_be_admin(make_store):
     st = make_store([S("PL", no="admin2")])
     assert auth.login(st, "admin", "x") is None  # 관리자 비밀번호가 없으면 로그인 불가
+
+
+def test_admin_login_repairs_overwritten_admin_hash(make_store):
+    # 배포 앱은 관리자 계정을 앱이 켜질 때 한 번 맞추므로, 그 뒤 DB의 해시가 바뀌면 로그인이 막혔음
+    st = started(make_store)
+    st.upsert_admin("not-a-bcrypt-hash")
+    assert auth.login(st, "admin", "adminpw") is None
+    assert auth.login(st, "admin", "adminpw", admin_password="adminpw").is_admin
+    assert auth.login(st, "admin", "wrong", admin_password="adminpw") is None
+    assert auth.login(st, "2026101", "1234", admin_password="adminpw").name == "학생1"

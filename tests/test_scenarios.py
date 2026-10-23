@@ -21,8 +21,8 @@ def assign_and_confirm(st) -> None:
     assert service.confirm(st, ADMIN).startswith("승인")
 
 
-def run_scenario(st, name, team_count, steps, assign=assign_and_confirm):
-    auth.ensure_admin(st, "pw")
+def run_scenario(st, name, team_count, steps, assign=assign_and_confirm, admin_pw="pw"):
+    auth.ensure_admin(st, admin_pw)
     with open(f"tests/data/{name}.csv", "rb") as f:
         assert service.start(st, ADMIN, f.read(), team_count).startswith("승인")
     by_n = {int(re.match(r"학생(\d+)", s.name).group(1)): s for s in st.list_students()}
@@ -62,6 +62,8 @@ def test_practice_scenario(scenario):
 @pytest.mark.parametrize("scenario", ALL, ids=lambda s: s[0])
 def test_practice_scenario_on_real_db(scenario):
     """TEAMFORM_PG_TESTS=1 일 때만 실제 DB(PgStore)로 같은 시나리오를 돌림."""
+    from teamform import config
     from tests.test_store_contract import _pg_store
 
-    run_scenario(_pg_store(), *scenario)
+    # 배포 앱과 같은 DB이므로 관리자 비밀번호는 실제 값 그대로 둠
+    run_scenario(_pg_store(), *scenario, admin_pw=config.get_secret("ADMIN_PASSWORD"))
